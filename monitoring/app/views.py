@@ -38,7 +38,7 @@ class AdminView(APIView):
 #         e_password = request.POST['e_password']
 #         employee = Employee.objects.filter(employee_name=e_ename,employee_password=e_password)
 
-def admin_forgot_password(request):
+def forgot_password(request):
     if request.method == 'POST':
         admin_email = request.data.get('admin_email')
 
@@ -56,7 +56,7 @@ def admin_forgot_password(request):
                                     "message": "OTP generated successfully.This step will be takes place when email creadentials are fullfill.",
                                     "otp": otp})
         else:
-            return JsonResponse({"error": "Admin not found."}, status=404)
+            return JsonResponse({"error": "Admin not found please do it properly."}, status=404)
 
     return HttpResponseBadRequest("Only POST method is allowed.")
 
