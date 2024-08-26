@@ -1,14 +1,41 @@
 
-
-# Create your views here.
-from django.http import JsonResponse, HttpResponseBadRequest,HttpResponseRedirect
+from django.shortcuts import render, redirect
+from django.http import HttpResponse
+from django.core.mail import send_mail
+from django.contrib.auth.hashers import check_password
+from django.urls import reverse
+from django.utils.crypto import get_random_string
+from django.contrib.auth.hashers import check_password, make_password
+from .models import Admin
+from django.http import JsonResponse, HttpResponseBadRequest
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from .serializers import AdminSerializer
-from .models import Admin
-import random
-import string
+from rest_framework.decorators import api_view
+
+@api_view(['GET', 'POST'])
+def admin_login_or_register_view(request):
+    if request.method == 'GET':
+        # Check if any admin exists
+        if Admin.objects.exists():
+            return render(request, 'LoginPage.html')  # If admin exists, render the login page
+        else:
+            return render(request, 'RegistrationPage.html')  # If no admin exists, render the register page
+
+        
+    elif request.method == 'POST':
+        email = request.POST.get('email')
+        password = request.POST.get('password')
+        # Check if the email and password match an existing admin
+        admin = Admin.objects.filter(admin_email=email, admin_password=password).first()
+        if admin:
+            # Redirect to some admin dashboard or other secure page after successful login
+            return JsonResponse({'detail': 'Admin Login successful'})
+        else:
+            return render(request, 'LoginPage.html', {'error': 'Invalid credentials.'})  # Re-render login page with error
+            # return HttpResponseRedirect('templates/LoginPage.html')
+
 class AdminRegisterView(APIView):
     def post(self, request):
         serializer = AdminSerializer(data=request.data)
@@ -18,46 +45,67 @@ class AdminRegisterView(APIView):
                             status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-class AdminView(APIView):
-    def post(self,request):
-        email = request.data.get('admin_email')
-        password = request.data.get('admin_password')
-        print(email,password)
-        admin = Admin.objects.filter(admin_email=email,admin_password=password).values()
-        print(admin)
-        if admin:
-            return Response({'detail': 'Admin Login successful'})
-        else:
-            return Response({'detail': 'Invalid credentials'})
 
-# class Employee(APIView):
-#     def post(self,request):
-#         e_name = request.POST['e_name']
-#         e_contact = request.POST['e_contact']
-#         e_email = request.POST['e_email']
-#         e_password = request.POST['e_password']
-#         employee = Employee.objects.filter(employee_name=e_ename,employee_password=e_password)
-
+@api_view(['GET', 'POST'])
 def forgot_password(request):
     if request.method == 'POST':
-        admin_email = request.data.get('admin_email')
+        email = request.data.get('admin_email')
+        print(email)
+        try:
+            admin = Admin.objects.filter(admin_email=email).values()
+            print(admin)
+            if admin:
+                token = get_random_string(50)  # Generate a random token
+                reset_link = request.build_absolute_uri(reverse('reset_password', kwargs={'token': token}))
+                print(reset_link)
+                # Store the token in the session or the database as per your logic
+                request.session['reset_token'] = token
+                request.session['reset_email'] = email
 
-        if not admin_email:
-            return HttpResponseBadRequest("e_email parameter is required.")
+                # Send email
+                try:
+                    send_mail(
+                        'Password Reset Request',
+                        f'Click the link to reset your password: {reset_link}',
+                        'svcwrkofc123@gmail.com',
+                        [email],
+                        fail_silently=False,
+                    )
+                except Exception as e:
+                    return HttpResponse(f"can not send email {e}")
+                return HttpResponse("Password reset link sent to your email.")
+        except Admin.DoesNotExist:
+            return HttpResponse("This email is not registered.")
 
-        admin_details = Admin.objects.filter(admin_email=admin_email).first()
-
-        if admin_details:
-            otp = ''.join(random.choices(string.digits, k=6))  # Generate OTP
-            # Update the employee's record with the generated OTP (assuming there's an e_otp field)
-            admin_details.admin_otp = otp
-            admin_details.save()
-            return JsonResponse({
-                                    "message": "OTP generated successfully.This step will be takes place when email creadentials are fullfill.",
-                                    "otp": otp})
-        else:
-            return JsonResponse({"error": "Admin not found please do it properly."}, status=404)
-
-    return HttpResponseBadRequest("Only POST method is allowed.")
+    # return render(request, 'forgot_password.html')
 
 
+def reset_password(request, token):
+    if request.method == 'POST':
+        new_password = request.POST.get('new_password')
+        confirm_password = request.POST.get('confirm_password')
+
+        if new_password == confirm_password:
+            email = request.session.get('reset_email')
+            try:
+                admin = Admin.objects.get(admin_email=email)
+                if request.session.get('reset_token') == token:
+                    admin.admin_password = make_password(new_password)
+                    admin.save()
+                    return HttpResponse("Password has been reset successfully.")
+            except Admin.DoesNotExist:
+                return HttpResponse("Invalid reset link.")
+
+        return HttpResponse("Password do not match.")
+
+    # return render(request, 'reset_password.html', {'token': token})
+
+# class AdminRegistration(APIView):
+#     def post(self, request, *args, **kwargs):
+#         serializer = AdminSerializer(data=request.data)
+#         if serializer.is_valid():
+#             serializer.save()
+#         #     return Response({"message": "Admin created successfully"}, status=status.HTTP_201_CREATED)
+#         # return Response(serializer.errors, status=
+#             return redirect('LoginPage.html')
+#         return render(request, 'RegistrationPage.html', {'errors': serializer.errors})
