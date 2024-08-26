@@ -1,8 +1,8 @@
 from datetime import datetime
 import logging
-from monitoring.lib import get_current_window
-from utils.helpers import get_ip_address
-from init_db import db, TimeEntry, Activity, User
+from service.monitoring.lib import get_current_window
+from service.utils.helpers import get_ip_address
+from service.init_db import db, TimeEntry, Activity
 from queue import Queue
 from collections import deque
 
@@ -48,8 +48,8 @@ class ActivityQueue:
 
 
 class ActivityMonitor:
-    def __init__(self, employee_id):
-        self.employee_id = employee_id
+    def __init__(self, user):
+        self.user = user
         self.current_activity = None
         self.current_time_entry_id = None
         self.activity_queue = Queue()
@@ -73,7 +73,7 @@ class ActivityMonitor:
                     if self.activity_queue.empty():
                         print('inside empty queue')
                         current_activity = Activity.get_or_none(
-                            Activity.employee_id == self.employee_id,
+                            Activity.user == self.user,
                             Activity.activity_name == activity_name,
                             Activity.app_name == app_name
                         )
@@ -86,7 +86,7 @@ class ActivityMonitor:
                         else:
                             new_time_entry = TimeEntry.create(first_start_time=now, start_time=now)
                             Activity.create(
-                                employee_id=self.employee_id,
+                                user=self.user,
                                 activity_name=activity_name,
                                 app_name=app_name,
                                 no_of_times_app_opened=1,
@@ -96,7 +96,7 @@ class ActivityMonitor:
 
                         # **# Enqueue only new activities**
                         self.activity_queue.put(current_activity or Activity.get(
-                            Activity.employee_id == self.employee_id,
+                            Activity.user == self.user,
                             Activity.activity_name == activity_name,
                             Activity.app_name == app_name
                         ))
@@ -114,7 +114,7 @@ class ActivityMonitor:
                             previous_time_entry.save()
 
                         current_activity = Activity.get_or_none(
-                            Activity.employee_id == self.employee_id,
+                            Activity.user == self.user,
                             Activity.activity_name == activity_name,
                             Activity.app_name == app_name
                         )
@@ -127,7 +127,7 @@ class ActivityMonitor:
                         else:
                             new_time_entry = TimeEntry.create(first_start_time=now, start_time=now)
                             Activity.create(
-                                employee_id=self.employee_id,
+                                user=self.user,
                                 activity_name=activity_name,
                                 app_name=app_name,
                                 no_of_times_app_opened=1,
@@ -137,7 +137,7 @@ class ActivityMonitor:
 
                         # **# Enqueue only new activities**
                         self.activity_queue.put(current_activity or Activity.get(
-                            Activity.employee_id == self.employee_id,
+                            Activity.user == self.user,
                             Activity.activity_name == activity_name,
                             Activity.app_name == app_name
                         ))
